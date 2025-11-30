@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的 Supabase 笔记</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f4f9; }
+        h1 { color: #333; text-align: center; }
+        #notes-list { list-style: none; padding: 0; }
+        .note-item { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .note-title { font-size: 1.2em; font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
+        .note-content { color: #555; line-height: 1.5; }
+        .loading { text-align: center; color: #888; }
+        .error { color: red; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <h1>📝 我的 Supabase 笔记</h1>
+    <ul id="notes-list">
+        <li class="loading">正在连接 Supabase 数据库...</li>
+    </ul>
+
+    <script>
+        // *** 您的配置信息 (已自动填充) ***
+        const SUPABASE_URL = 'https://mmuadyrcrkocezjplnwi.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdWFkeXJjcmtvY2V6anBsbndpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTA2MjQsImV4cCI6MjA4MDA2NjYyNH0.bD-4DlPTJ72HgKO-YG4HV79pVKpQOr4Oec7xpjLLtlw';
+
+        // 1. 初始化客户端
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // 2. 获取数据函数
+        async function fetchNotes() {
+            const listElement = document.getElementById('notes-list');
+            
+            try {
+                // 查询 'notes' 表
+                const { data: notes, error } = await supabase
+                    .from('notes')
+                    .select('title, content')
+                    .order('created_at', { ascending: false }); // 按时间倒序
+
+                // 错误处理
+                if (error) {
+                    throw error;
+                }
+
+                // 清空加载提示
+                listElement.innerHTML = '';
+
+                // 渲染数据
+                if (!notes || notes.length === 0) {
+                    listElement.innerHTML = '<li style="text-align:center">📭 数据库里还没有笔记，去 Supabase 添加一条吧！</li>';
+                    return;
+                }
+
+                notes.forEach(note => {
+                    const li = document.createElement('li');
+                    li.className = 'note-item';
+                    li.innerHTML = `
+                        <div class="note-title">${escapeHtml(note.title)}</div>
+                        <div class="note-content">${escapeHtml(note.content)}</div>
+                    `;
+                    listElement.appendChild(li);
+                });
+
+            } catch (err) {
+                console.error('Error:', err);
+                listElement.innerHTML = `<li class="error">❌ 加载失败: ${err.message}<br>请检查 Supabase RLS 策略是否已开启 Public Read。</li>`;
+            }
+        }
+
+        // 简单的防注入转义函数
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // 运行
+        fetchNotes();
+    </script>
+</body>
+</html>
