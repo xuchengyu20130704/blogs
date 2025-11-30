@@ -28,23 +28,24 @@
         const SUPABASE_URL = 'https://mmuadyrcrkocezjplnwi.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdWFkeXJjcmtvY2V6anBsbndpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTA2MjQsImV4cCI6MjA4MDA2NjYyNH0.bD-4DlPTJ72HgKO-YG4HV79pVKpQOr4Oec7xpjLLtlw';
 
-        // 1. 初始化客户端
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // 1. 初始化客户端：使用不同的变量名 (supabaseClient) 来避免引用错误。
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // 2. 获取数据函数
         async function fetchNotes() {
             const listElement = document.getElementById('notes-list');
             
             try {
-                // 查询 'notes' 表
-                const { data: notes, error } = await supabase
+                // *** 关键修正：使用 supabaseClient 来调用 from() 方法 ***
+                const { data: notes, error } = await supabaseClient
                     .from('notes')
                     .select('title, content')
                     .order('created_at', { ascending: false }); // 按时间倒序
 
                 // 错误处理
                 if (error) {
-                    throw error;
+                    // 将错误抛出，以便被 catch 块捕获
+                    throw error; 
                 }
 
                 // 清空加载提示
@@ -67,8 +68,9 @@
                 });
 
             } catch (err) {
-                console.error('Error:', err);
-                listElement.innerHTML = `<li class="error">❌ 加载失败: ${err.message}<br>请检查 Supabase RLS 策略是否已开启 Public Read。</li>`;
+                console.error('Supabase fetch error:', err);
+                // 确保在前端显示详细的错误信息
+                listElement.innerHTML = `<li class="error">❌ 加载失败: ${err.message}<br>请检查浏览器控制台了解详情。</li>`;
             }
         }
 
