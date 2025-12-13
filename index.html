@@ -3,207 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>认证笔记应用 - Supabase Demo</title>
+    <title>公共笔记阅读器 - Supabase Demo</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f4f9; color: #333; }
-        h1, h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 25px; }
-        /* Auth UI */
-        #auth-ui, #post-form-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        input[type="email"], input[type="password"], textarea, input[type="text"] { width: 100%; padding: 10px; margin: 5px 0 15px 0; display: inline-block; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #38a169; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; }
-        button:hover { background-color: #2f855a; }
-        #logged-out-view button { margin-top: 10px; }
-        /* Note List */
+        /* --- 颜色变量定义 (粉色主题) --- */
+        :root {
+            --primary-color: #ff69b4; /* 亮粉色 (Deep Pink) */
+            --secondary-color: #ffb6c1; /* 浅粉色 (Light Pink) */
+            --background-color: #fce4ec; /* 非常浅的粉色背景 */
+            --sidebar-bg: #e91e63; /* 侧边栏深粉色 */
+            --text-color: #333;
+            --sidebar-text: #f8bbd0;
+            --sidebar-hover-bg: #c2185b;
+        }
+
+        /* 全局重置和基础样式 */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: var(--background-color); 
+            color: var(--text-color); 
+        }
+
+        /* --- 布局核心：Flexbox 双列布局 --- */
+        #container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* 左侧边栏 (菜单/目录) */
+        #sidebar {
+            width: 250px;
+            background-color: var(--sidebar-bg);
+            color: white;
+            padding: 20px 0;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+            position: sticky; /* 使目录滚动时保持在视口内 */
+            top: 0;
+            overflow-y: auto;
+        }
+        
+        /* 右侧主内容区域 */
+        #main-content {
+            flex-grow: 1;
+            padding: 20px;
+            max-width: calc(100% - 250px);
+        }
+        
+        /* 菜单项样式 */
+        #sidebar h3 {
+            padding: 0 20px 10px 20px;
+            margin-top: 0;
+            border-bottom: 1px solid var(--sidebar-hover-bg);
+            color: white;
+        }
+        #sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #sidebar ul li a {
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: var(--sidebar-text);
+            border-left: 5px solid transparent;
+            transition: background-color 0.2s, border-left-color 0.2s;
+        }
+        #sidebar ul li a:hover, #sidebar ul li.active a {
+            background-color: var(--sidebar-hover-bg);
+            border-left-color: var(--secondary-color);
+            color: white;
+        }
+
+        /* 内容区通用样式 */
+        h1 { border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 0; }
+        
+        /* 笔记列表样式 */
         #notes-list { list-style: none; padding: 0; }
-        .note-item { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .note-title { font-size: 1.2em; font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
-        .status-message { color: #d97706; margin-top: 10px; }
+        .category-group { margin-bottom: 30px; border-left: 5px solid var(--secondary-color); padding-left: 15px; }
+        .category-group h2 { 
+            color: var(--primary-color); 
+            font-size: 1.5em; 
+            margin-top: 0;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed var(--secondary-color);
+            padding-bottom: 5px;
+        }
+        .note-item { 
+            background: white; 
+            border-radius: 8px; 
+            padding: 15px; 
+            margin-bottom: 15px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 更柔和的阴影 */
+            transition: transform 0.2s;
+        }
+        .note-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0,0,0,0.15);
+        }
+        .note-title { font-size: 1.2em; font-weight: bold; color: var(--primary-color); margin-bottom: 5px; }
         .error { color: red; }
     </style>
 </head>
 <body>
 
-    <div id="auth-ui">
-        <h2>用户认证</h2>
-        
-        <div id="logged-out-view">
-            <p>请登录或注册以发布新笔记。</p>
-            <input type="email" id="auth-email" placeholder="邮箱" required>
-            <input type="password" id="auth-password" placeholder="密码" required>
-            <button onclick="handleSignIn()">登录</button>
-            <button onclick="handleSignUp()">注册</button>
-            <p class="status-message" id="auth-status"></p>
-        </div>
-        
-        <div id="logged-in-view" style="display:none;">
-            <p>欢迎回来，<span id="user-email-display"></span>！</p>
-            <button onclick="handleSignOut()">登出</button>
-        </div>
-    </div>
+    <div id="container">
 
-    <div id="post-form-container" style="display:none;">
-        <h2>发布新笔记</h2>
-        <form id="note-form">
-            <input type="text" id="note-title" placeholder="笔记标题" required>
-            <textarea id="note-content" placeholder="笔记内容" rows="4" required></textarea>
-            <button type="submit">发布笔记</button>
-            <p class="status-message" id="note-status"></p>
-        </form>
-    </div>
+        <nav id="sidebar">
+            <h3>笔记分类</h3>
+            <ul id="category-menu">
+                <li class="active"><a href="#public-notes">🏠 所有笔记</a></li>
+                </ul>
+        </nav>
 
-    <h1>📝 我的 Supabase 笔记 (公共)</h1>
-    <ul id="notes-list">
-        <li class="loading">正在加载公共笔记列表...</li>
-    </ul>
+        <main id="main-content">
+            
+            <section id="public-notes">
+                <h1>📝 公共笔记 (按分类)</h1>
+                <div id="notes-list">
+                    <p class="loading">正在加载公共笔记列表...</p>
+                </div>
+            </section>
 
-    <script>
-        // *** 您的配置信息 (已自动填充) ***
-        const SUPABASE_URL = 'https://mmuadyrcrkocezjplnwi.supabase.co';
-        // 请使用您自己的 Anon Key
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdWFkeXJjcmtvY2V6anBsbndpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTA2MjQsImV4cCI6MjA4MDA2NjYyNH0.bD-4DlPTJ72HgKO-YG4HV79pVKpQOr4Oec7xpjLLtlw';
+        </main>
+    </div> <script>
+        // *** 您的最终配置信息 (使用您提供的真实值) ***
+        const SUPABASE_URL = 'https://mmuadyrcrkocezjplnwi.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdWFkeXJjcmtvY2V6anBsbndpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTA2MjQsImV4cCI6MjA4MDA2NjYyNH0.bD-4DlPTJ72HgKO-YG4HV79pVKpQOr4Oec7xpjLLtlw'; 
 
         // 初始化客户端
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // --- 认证处理函数 ---
-
-        async function handleSignUp() {
-            const email = document.getElementById('auth-email').value;
-            const password = document.getElementById('auth-password').value;
-            const statusEl = document.getElementById('auth-status');
-            
-            // 注册
-            const { error } = await supabaseClient.auth.signUp({ email, password });
-            
-            if (error) {
-                statusEl.textContent = `注册失败: ${error.message}`;
-                statusEl.classList.add('error');
-            } else {
-                // 注册成功后，提示用户检查邮件进行确认
-                statusEl.textContent = '注册成功！请检查您的邮箱进行确认。';
-                statusEl.classList.remove('error');
-            }
-        }
-
-        async function handleSignIn() {
-            const email = document.getElementById('auth-email').value;
-            const password = document.getElementById('auth-password').value;
-            const statusEl = document.getElementById('auth-status');
-
-            // 登录
-            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
-            if (error) {
-                statusEl.textContent = `登录失败: ${error.message}`;
-                statusEl.classList.add('error');
-            } else {
-                // 登录成功，状态变化由 onAuthStateChange 自动处理
-                statusEl.textContent = '登录中...';
-                statusEl.classList.remove('error');
-            }
-        }
-
-        async function handleSignOut() {
-            // 登出
-            await supabaseClient.auth.signOut();
-        }
-
-        function handleLogin(user) {
-            // 显示已登录状态和发帖表单
-            document.getElementById('logged-out-view').style.display = 'none';
-            document.getElementById('logged-in-view').style.display = 'block';
-            document.getElementById('post-form-container').style.display = 'block';
-            document.getElementById('user-email-display').textContent = user.email;
-        }
-
-        function handleLogout() {
-            // 显示未登录状态
-            document.getElementById('logged-out-view').style.display = 'block';
-            document.getElementById('logged-in-view').style.display = 'none';
-            document.getElementById('post-form-container').style.display = 'none';
-            document.getElementById('auth-status').textContent = '已登出。';
-        }
-
-        // 监听认证状态变化 (关键：用于自动切换 UI)
-        supabaseClient.auth.onAuthStateChange((event, session) => {
-            if (session) {
-                handleLogin(session.user);
-            } else {
-                handleLogout();
-            }
-        });
-
-        // --- 数据插入函数 (POST/INSERT) ---
-
-        async function createNote(event) {
-            event.preventDefault(); // 阻止表单默认提交行为
-            
-            const title = document.getElementById('note-title').value;
-            const content = document.getElementById('note-content').value;
-            const statusEl = document.getElementById('note-status');
-
-            statusEl.textContent = '正在发布...';
-            
-            try {
-                // 插入操作，只有 authenticated 用户才能成功
-                const { error } = await supabaseClient
-                    .from('notes')
-                    .insert([
-                        { title: title, content: content }
-                    ]);
-
-                if (error) {
-                    throw error;
-                }
-
-                statusEl.textContent = '发布成功！正在刷新列表...';
-                document.getElementById('note-form').reset(); // 清空表单
-                fetchNotes(); // 重新加载笔记列表以显示新笔记
-
-            } catch (err) {
-                console.error('Insert Error:', err);
-                statusEl.textContent = `发布失败: ${err.message}`;
-                statusEl.classList.add('error');
-            }
-        }
-
-        // 绑定表单提交事件
-        document.getElementById('note-form').addEventListener('submit', createNote);
-
-        // --- 数据读取函数 (SELECT/GET) ---
+        // --- 数据读取和归类函数 ---
 
         async function fetchNotes() {
-            const listElement = document.getElementById('notes-list');
+            const listContainer = document.getElementById('notes-list');
+            const menuContainer = document.getElementById('category-menu');
             
+            listContainer.innerHTML = '<p class="loading">正在加载公共笔记列表...</p>';
+
             try {
-                // 读取操作，所有 anon 用户都能读取
+                // 请求 title, content 和新的 category 字段
                 const { data: notes, error } = await supabaseClient
                     .from('notes')
-                    .select('title, content')
-                    .order('created_at', { ascending: false });
+                    .select('title, content, category')
+                    .order('created_at', { ascending: false }); // 仍按时间倒序
 
                 if (error) {
                     throw error;
                 }
 
-                listElement.innerHTML = ''; // 清空加载提示
-
                 if (!notes || notes.length === 0) {
-                    listElement.innerHTML = '<li style="text-align:center">📭 数据库里还没有笔记。</li>';
+                    listContainer.innerHTML = '<p style="text-align:center">📭 数据库里还没有笔记。</p>';
                     return;
                 }
 
-                notes.forEach(note => {
-                    const li = document.createElement('li');
-                    li.className = 'note-item';
-                    li.innerHTML = `<div class="note-title">${escapeHtml(note.title)}</div><div class="note-content">${escapeHtml(note.content)}</div>`;
-                    listElement.appendChild(li);
-                });
+                // 1. 按 Category 分组
+                const groupedNotes = notes.reduce((acc, note) => {
+                    // 使用 '未分类' 作为默认分类名
+                    const categoryName = note.category || '未分类';
+                    if (!acc[categoryName]) {
+                        acc[categoryName] = [];
+                    }
+                    acc[categoryName].push(note);
+                    return acc;
+                }, {});
+
+                // 2. 渲染主内容区域 (按分类分组展示)
+                listContainer.innerHTML = '';
+                let newMenuHTML = '<li class="active"><a href="#public-notes">🏠 所有笔记</a></li>'; // 保持第一个链接
+
+                for (const category in groupedNotes) {
+                    const categoryId = `cat-${category.replace(/\s/g, '_')}`; // 创建一个用于锚点跳转的ID
+                    
+                    // a. 渲染内容区的分类标题和笔记
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'category-group';
+                    groupDiv.id = categoryId;
+                    groupDiv.innerHTML = `<h2>${escapeHtml(category)} (${groupedNotes[category].length})</h2>`;
+                    
+                    const ul = document.createElement('ul');
+                    ul.style.listStyle = 'none';
+                    ul.style.padding = '0';
+                    
+                    groupedNotes[category].forEach(note => {
+                        const li = document.createElement('li');
+                        li.className = 'note-item';
+                        li.innerHTML = `<div class="note-title">${escapeHtml(note.title)}</div><div class="note-content">${escapeHtml(note.content)}</div>`;
+                        ul.appendChild(li);
+                    });
+                    
+                    groupDiv.appendChild(ul);
+                    listContainer.appendChild(groupDiv);
+
+                    // b. 渲染侧边栏的分类链接
+                    newMenuHTML += `<li><a href="#${categoryId}">${escapeHtml(category)}</a></li>`;
+                }
+
+                // 3. 更新侧边栏菜单
+                menuContainer.innerHTML = newMenuHTML;
 
             } catch (err) {
                 console.error('Fetch Error:', err);
-                listElement.innerHTML = `<li class="error">❌ 加载失败: ${err.message}. 请检查控制台。</li>`;
+                listContainer.innerHTML = `<p class="error">❌ 加载失败: ${err.message}. 请检查控制台。</p>`;
             }
         }
 
