@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>可爱笔记阅读器 - Supabase Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* --- 颜色变量定义 (可爱二次元主题) --- */
+        :root {
+            --primary-color: #ff69b4; /* 强调色：中粉色 */
+            --secondary-color: #ffb6c1; /* 柔和色：浅粉色 */
+            --background-color: #fff0f5; /* 极浅背景色：奶油粉 */
+            --sidebar-bg: #f7cac9; /* 侧边栏背景：柔和薰衣草粉 */
+            --text-color: #333; /* 主要文字颜色 */
+            --sidebar-text: #2c3e50; /* 侧边栏文字深色 */
+            --sidebar-hover-bg: #f0f8ff; /* 侧边栏悬停：极浅蓝白 */
+            --note-bg: white;
+            --note-shadow: 0 6px 15px rgba(255, 105, 180, 0.1); /* 带有粉色调的柔和阴影 */
+            --border-radius-lg: 12px; /* 更大的圆角 */
+        }
+
+        /* 全局重置和基础样式 */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: var(--background-color); 
+            color: var(--text-color); 
+        }
+
+        /* --- 布局核心：Flexbox 双列布局 --- */
+        #container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* 左侧边栏 (菜单/目录) */
+        #sidebar {
+            width: 250px;
+            background-color: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            padding: 20px 0;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            overflow-y: auto;
+        }
+        
+        /* 右侧主内容区域 */
+        #main-content {
+            flex-grow: 1;
+            padding: 30px; /* 增加内边距 */
+            max-width: calc(100% - 250px);
+        }
+        
+        /* 菜单项样式 */
+        #sidebar h3 {
+            padding: 0 20px 10px 20px;
+            margin-top: 0;
+            border-bottom: 1px solid var(--secondary-color);
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+        #sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #sidebar ul li a {
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: var(--sidebar-text);
+            border-left: 5px solid transparent;
+            transition: background-color 0.3s, border-left-color 0.3s;
+        }
+        #sidebar ul li a:hover, #sidebar ul li.active a {
+            background-color: var(--sidebar-hover-bg);
+            border-left-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        /* 内容区通用样式 */
+        h1 { border-bottom: 3px solid var(--secondary-color); padding-bottom: 15px; margin-top: 0; color: var(--primary-color); }
+        
+        /* 笔记列表样式 */
+        #notes-list { list-style: none; padding: 0; }
+        .category-group { margin-bottom: 40px; border-left: 5px solid var(--primary-color); padding-left: 20px; }
+        .category-group h2 { 
+            color: var(--primary-color); 
+            font-size: 1.8em; 
+            margin-top: 0;
+            margin-bottom: 20px;
+            border-bottom: 1px dashed var(--secondary-color);
+            padding-bottom: 5px;
+        }
+        .note-item { 
+            background: var(--note-bg); 
+            border-radius: var(--border-radius-lg); 
+            padding: 20px; 
+            margin-bottom: 15px; 
+            box-shadow: var(--note-shadow);
+            transition: transform 0.2s;
+        }
+        .note-item:hover {
+            transform: translateY(-3px); /* 提升效果更明显 */
+            box-shadow: 0 8px 20px rgba(255, 105, 180, 0.2);
+        }
+        .note-title { font-size: 1.3em; font-weight: bold; color: var(--primary-color); margin-bottom: 8px; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+
+        <nav id="sidebar">
+            <h3>📖 笔记分类</h3>
+            <ul id="category-menu">
+                <li class="active"><a href="#public-notes">🏠 所有笔记</a></li>
+            </ul>
+            <div style="padding: 20px; margin-top: 30px; font-size: 0.9em; color: var(--sidebar-text);">
+                <p>这是您的可爱 Supabase 阅读器。</p>
+            </div>
+        </nav>
+
+        <main id="main-content">
+            
+            <section id="public-notes">
+                <h1>✨ 公共笔记列表 (按分类)</h1>
+                <div id="notes-list">
+                    <p class="loading">正在加载公共笔记列表...</p>
+                </div>
+            </section>
+
+        </main>
+    </div> <script>
+        // *** 您的最终配置信息 (使用您提供的真实值) ***
+        const SUPABASE_URL = 'https://mmuadyrcrkocezjplnwi.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdWFkeXJjcmtvY2V6anBsbndpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0OTA2MjQsImV4cCI6MjA4MDA2NjYyNH0.bD-4DlPTJ72HgKO-YG4HV79pVKpQOr4Oec7xpjLLtlw'; 
+
+        // 初始化客户端
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // --- 数据读取和归类函数 ---
+
+        async function fetchNotes() {
+            const listContainer = document.getElementById('notes-list');
+            const menuContainer = document.getElementById('category-menu');
+            
+            listContainer.innerHTML = '<p class="loading">正在加载公共笔记列表...</p>';
+
+            try {
+                // 读取 title, content 和 category 字段
+                const { data: notes, error } = await supabaseClient
+                    .from('notes')
+                    .select('title, content, category')
+                    .order('created_at', { ascending: false }); 
+
+                if (error) {
+                    throw error;
+                }
+
+                if (!notes || notes.length === 0) {
+                    listContainer.innerHTML = '<p style="text-align:center">📭 数据库里还没有笔记。</p>';
+                    return;
+                }
+
+                // 1. 按 Category 分组
+                const groupedNotes = notes.reduce((acc, note) => {
+                    const categoryName = note.category || '未分类';
+                    if (!acc[categoryName]) {
+                        acc[categoryName] = [];
+                    }
+                    acc[categoryName].push(note);
+                    return acc;
+                }, {});
+
+                // 2. 渲染主内容区域 (按分类分组展示)
+                listContainer.innerHTML = '';
+                let newMenuHTML = '<li class="active"><a href="#public-notes">🏠 所有笔记</a></li>'; 
+
+                for (const category in groupedNotes) {
+                    // 创建一个用于锚点跳转的ID，替换空格
+                    const categoryId = `cat-${category.replace(/\s/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}`; 
+                    
+                    // a. 渲染内容区的分类标题和笔记
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'category-group';
+                    groupDiv.id = categoryId;
+                    groupDiv.innerHTML = `<h2>${escapeHtml(category)} (${groupedNotes[category].length})</h2>`;
+                    
+                    const ul = document.createElement('ul');
+                    ul.style.listStyle = 'none';
+                    ul.style.padding = '0';
+                    
+                    groupedNotes[category].forEach(note => {
+                        const li = document.createElement('li');
+                        li.className = 'note-item';
+                        li.innerHTML = `<div class="note-title">${escapeHtml(note.title)}</div><div class="note-content">${escapeHtml(note.content)}</div>`;
+                        ul.appendChild(li);
+                    });
+                    
+                    groupDiv.appendChild(ul);
+                    listContainer.appendChild(groupDiv);
+
+                    // b. 渲染侧边栏的分类链接
+                    newMenuHTML += `<li><a href="#${categoryId}">${escapeHtml(category)}</a></li>`;
+                }
+
+                // 3. 更新侧边栏菜单
+                menuContainer.innerHTML = newMenuHTML;
+
+            } catch (err) {
+                console.error('Fetch Error:', err);
+                listContainer.innerHTML = `<p class="error">❌ 加载失败: ${err.message}. 请检查控制台。</p>`;
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // 页面启动时加载笔记列表
+        fetchNotes();
+
+    </script>
+</body>
+</html>
